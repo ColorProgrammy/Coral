@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <windows.h>
 
-WavFile* loadWavFile(const char* filename) {
+inline WavFile* loadWavFile(const char* filename) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         return NULL;
@@ -32,7 +32,7 @@ WavFile* loadWavFile(const char* filename) {
     return wavFile;
 }
 
-void playWavFile(WavFile* wavFile) {
+inline void playWavFile(WavFile* wavFile) {
     if (!wavFile) {
         return;
     }
@@ -65,7 +65,7 @@ void playWavFile(WavFile* wavFile) {
     waveOutClose(hWaveOut);
 }
 
-void freeWavFile(WavFile* wavFile) {
+inline void freeWavFile(WavFile* wavFile) {
     if (wavFile) {
         free(wavFile->data);
         free(wavFile);
