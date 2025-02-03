@@ -2,14 +2,20 @@
 #include <stdio.h>
 
 int main() {
-    WavFile* wavFile = loadWavFile("path/to/your/file.wav");
-    if (wavFile) {
-        playWavFile(wavFile);
-        freeWavFile(wavFile);
-    }
-    else {
-        printf("Failed to load WAV file.\n");
+    const char* filename = "audio/sound.wav";
+
+    WavFile* wav = loadWavFile(filename);
+    if (!wav) {
+        printf("Error: %s\n", getAudioError());
+        return 1;
     }
 
+    if (!playWavFile(wav)) {
+        printf("Playback failed: %s\n", getAudioError());
+    } else {
+        printf("Playback completed successfully\n");
+    }
+
+    freeWavFile(wav);
     return 0;
 }
