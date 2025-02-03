@@ -32,8 +32,8 @@ typedef struct {
     uint8_t* data;
 } WavFile;
 
-WavFile* loadWavFile(const char* filename);
-void playWavFile(WavFile* wavFile);
-void freeWavFile(WavFile* wavFile);
+inline WavFile* loadWavFile(const char* filename);
+inline void playWavFile(WavFile* wavFile);
+inline void freeWavFile(WavFile* wavFile);
 
 #endif // WAVE_H
