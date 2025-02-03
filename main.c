@@ -1,4 +1,4 @@
-#include "wave/wave.h"
+#include "SimpleWave/wave.h"
 #include <stdio.h>
 
 int main() {
