@@ -2,15 +2,17 @@
 #define WAVE_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
+#pragma pack(push, 1)
 typedef struct {
-    uint32_t chunkId;
+    char chunkID[4];
     uint32_t chunkSize;
-    uint32_t format;
+    char format[4];
 } RiffHeader;
 
 typedef struct {
-    uint32_t subChunk1Id;
+    char subChunk1ID[4];
     uint32_t subChunk1Size;
     uint16_t audioFormat;
     uint16_t numChannels;
@@ -21,9 +23,10 @@ typedef struct {
 } WavFormat;
 
 typedef struct {
-    uint32_t subChunk2Id;
+    char subChunk2ID[4];
     uint32_t subChunk2Size;
 } WavData;
+#pragma pack(pop)
 
 typedef struct {
     RiffHeader riffHeader;
@@ -32,8 +35,9 @@ typedef struct {
     uint8_t* data;
 } WavFile;
 
-inline WavFile* loadWavFile(const char* filename);
-inline void playWavFile(WavFile* wavFile);
-inline void freeWavFile(WavFile* wavFile);
+WavFile* loadWavFile(const char* filename);
+bool playWavFile(WavFile* wavFile);
+void freeWavFile(WavFile* wavFile);
+const char* getAudioError();
 
-#endif // WAVE_H
+#endif
