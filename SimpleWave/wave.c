@@ -20,7 +20,7 @@
 // Linux audio backend selection
 #ifdef PLATFORM_LINUX
 #define TRY_PULSE_AUDIO
-//#define TRY_ALSA
+#define TRY_ALSA
 #if !defined(TRY_PULSE_AUDIO) && !defined(TRY_ALSA)
 #error "Please define either TRY_PULSE_AUDIO or TRY_ALSA for Linux"
 #endif
