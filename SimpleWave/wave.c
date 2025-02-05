@@ -1,7 +1,17 @@
+/*
+@file - wave.c
+@developer - ColorProgrammy
+@brief - The main code of the library.
+@date - 05/02/2025
+@description - The main code for playing .wav files.
+*/
+
+
 #include "wave.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 // Platform detection
 #if defined(_WIN32)
@@ -54,6 +64,7 @@ WavFile* loadWavFile(const char* filename) {
         snprintf(lastError, sizeof(lastError), "Memory allocation failed");
         return NULL;
     }
+    memset(wavFile, 0, sizeof(WavFile));
 
     if (fread(&wavFile->riffHeader, sizeof(RiffHeader), 1, file) != 1) {
         snprintf(lastError, sizeof(lastError), "Invalid WAV file header");
@@ -66,44 +77,163 @@ WavFile* loadWavFile(const char* filename) {
         goto error;
     }
 
-    if (fread(&wavFile->wavFormat, sizeof(WavFormat), 1, file) != 1) {
-        snprintf(lastError, sizeof(lastError), "Invalid format chunk");
-        goto error;
-    }
+    long currentPos = ftell(file);
+    bool fmtFound = false;
+    bool dataFound = false;
 
-    if (memcmp(wavFile->wavFormat.subChunk1ID, "fmt ", 4) != 0) {
-        snprintf(lastError, sizeof(lastError), "Format chunk missing");
-        goto error;
-    }
+    while (currentPos < (long)(wavFile->riffHeader.chunkSize + 8)) {
+        char chunkID[4];
+        uint32_t chunkSize;
 
-    if (fread(&wavFile->wavData, sizeof(WavData), 1, file) != 1) {
-        snprintf(lastError, sizeof(lastError), "Invalid data chunk");
-        goto error;
-    }
+        if (fread(chunkID, 4, 1, file) != 1) break;
+        if (fread(&chunkSize, 4, 1, file) != 1) break;
 
-    if (memcmp(wavFile->wavData.subChunk2ID, "data", 4) != 0) {
-        snprintf(lastError, sizeof(lastError), "Data chunk missing");
-        goto error;
-    }
+        currentPos += 8;
 
-    wavFile->data = malloc(wavFile->wavData.subChunk2Size);
-    if (!wavFile->data) {
-        snprintf(lastError, sizeof(lastError), "Memory allocation failed for audio data");
-        goto error;
-    }
+        if (memcmp(chunkID, "fmt ", 4) == 0) {
+            if (fread(&wavFile->wavFormat, sizeof(WavFormat), 1, file) != 1) {
+                snprintf(lastError, sizeof(lastError), "Invalid format chunk");
+                goto error;
+            }
+            fmtFound = true;
+            currentPos += chunkSize;
+            fseek(file, currentPos, SEEK_SET);
+        } else if (memcmp(chunkID, "data", 4) == 0) {
+            memcpy(wavFile->wavData.subChunk2ID, chunkID, 4);
+            wavFile->wavData.subChunk2Size = chunkSize;
 
-    if (fread(wavFile->data, wavFile->wavData.subChunk2Size, 1, file) != 1) {
-        snprintf(lastError, sizeof(lastError), "Failed to read audio data");
-        goto error;
+            wavFile->data = malloc(chunkSize);
+            if (!wavFile->data) {
+                snprintf(lastError, sizeof(lastError), "Memory allocation failed for audio data");
+                goto error;
+            }
+
+            if (fread(wavFile->data, chunkSize, 1, file) != 1) {
+                snprintf(lastError, sizeof(lastError), "Failed to read audio data");
+                goto error;
+            }
+
+            dataFound = true;
+            currentPos += chunkSize;
+            break;
+        } else {
+            currentPos += chunkSize;
+            fseek(file, currentPos, SEEK_SET);
+        }
     }
 
     fclose(file);
+
+    if (!fmtFound) {
+        snprintf(lastError, sizeof(lastError), "Format chunk not found");
+        goto error;
+    }
+
+    if (!dataFound) {
+        snprintf(lastError, sizeof(lastError), "Data chunk not found");
+        goto error;
+    }
+
     return wavFile;
 
 error:
     fclose(file);
     freeWavFile(wavFile);
     return NULL;
+}
+
+bool adjustVolume(WavFile* wavFile, float volumeFactor) {
+    if (!wavFile) {
+        snprintf(lastError, sizeof(lastError), "Null WAV file pointer");
+        return false;
+    }
+    if (wavFile->wavFormat.audioFormat != 1) {
+        snprintf(lastError, sizeof(lastError), "Volume adjustment only supports PCM format");
+        return false;
+    }
+
+    uint16_t bitsPerSample = wavFile->wavFormat.bitsPerSample;
+    uint32_t dataSize = wavFile->wavData.subChunk2Size;
+    uint8_t* data = wavFile->data;
+
+    if (bitsPerSample % 8 != 0) {
+        snprintf(lastError, sizeof(lastError), "Unsupported bits per sample: %d", bitsPerSample);
+        return false;
+    }
+
+    uint32_t bytesPerSample = bitsPerSample / 8;
+    uint32_t numSamples = dataSize / bytesPerSample;
+
+    for (uint32_t i = 0; i < numSamples; ++i) {
+        uint8_t* samplePtr = data + i * bytesPerSample;
+
+        switch (bitsPerSample) {
+            case 8: {
+                uint8_t sample = *samplePtr;
+                int16_t adjusted = (int16_t)((sample - 128) * volumeFactor) + 128;
+                if (adjusted < 0) adjusted = 0;
+                else if (adjusted > 255) adjusted = 255;
+                *samplePtr = (uint8_t)adjusted;
+                break;
+            }
+            case 16: {
+                int16_t sample = *(int16_t*)samplePtr;
+                int32_t adjusted = (int32_t)(sample * volumeFactor);
+                if (adjusted > INT16_MAX) adjusted = INT16_MAX;
+                else if (adjusted < INT16_MIN) adjusted = INT16_MIN;
+                *(int16_t*)samplePtr = (int16_t)adjusted;
+                break;
+            }
+            case 24: {
+                int32_t sample = 0;
+                memcpy(&sample, samplePtr, 3);
+                if (sample & 0x00800000) {
+                    sample |= 0xFF000000;
+                } else {
+                    sample &= 0x00FFFFFF;
+                }
+                sample = (int32_t)(sample * volumeFactor);
+                if (sample > 0x007FFFFF) sample = 0x007FFFFF;
+                else if (sample < (int32_t)0xFF800000) sample = (int32_t)0xFF800000;
+                memcpy(samplePtr, &sample, 3);
+                break;
+            }
+            case 32: {
+                int32_t sample = *(int32_t*)samplePtr;
+                int64_t adjusted = (int64_t)(sample * volumeFactor);
+                if (adjusted > INT32_MAX) adjusted = INT32_MAX;
+                else if (adjusted < INT32_MIN) adjusted = INT32_MIN;
+                *(int32_t*)samplePtr = (int32_t)adjusted;
+                break;
+            }
+            default: {
+                snprintf(lastError, sizeof(lastError), "Unsupported bits per sample: %d", bitsPerSample);
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+WavMetadata getWavMetadata(const WavFile* wavFile) {
+    WavMetadata metadata = {0};
+    if (wavFile) {
+        metadata.sampleRate = wavFile->wavFormat.sampleRate;
+        metadata.numChannels = wavFile->wavFormat.numChannels;
+        metadata.bitsPerSample = wavFile->wavFormat.bitsPerSample;
+        if (wavFile->wavFormat.byteRate > 0) {
+            metadata.duration = (double)wavFile->wavData.subChunk2Size / wavFile->wavFormat.byteRate;
+        }
+    }
+    return metadata;
+}
+
+void freeWavFile(WavFile* wavFile) {
+    if (wavFile) {
+        free(wavFile->data);
+        free(wavFile);
+    }
 }
 
 bool playWavFile(WavFile* wavFile) {
@@ -326,11 +456,4 @@ bool playWavFile(WavFile* wavFile) {
 
     snprintf(lastError, sizeof(lastError), "Unsupported platform");
     return false;
-}
-
-void freeWavFile(WavFile* wavFile) {
-    if (wavFile) {
-        free(wavFile->data);
-        free(wavFile);
-    }
 }
