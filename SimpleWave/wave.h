@@ -35,9 +35,18 @@ typedef struct {
     uint8_t* data;
 } WavFile;
 
+typedef struct {
+    int sampleRate;
+    int numChannels;
+    int bitsPerSample;
+    double duration;
+} WavMetadata;
+
 WavFile* loadWavFile(const char* filename);
 bool playWavFile(WavFile* wavFile);
 void freeWavFile(WavFile* wavFile);
 const char* getAudioError();
+bool adjustVolume(WavFile* wavFile, float volumeFactor);
+WavMetadata getWavMetadata(const WavFile* wavFile);
 
 #endif
