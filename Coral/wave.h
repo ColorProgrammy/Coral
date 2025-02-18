@@ -42,11 +42,19 @@ typedef struct {
     double duration;
 } WavMetadata;
 
-WavFile* loadWavFile(const char* filename);
-bool playWavFile(WavFile* wavFile);
-void freeWavFile(WavFile* wavFile);
-const char* getAudioError();
-bool adjustVolume(WavFile* wavFile, float volumeFactor);
-WavMetadata getWavMetadata(const WavFile* wavFile);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    WavFile* loadWavFile(const char* filename);
+    bool playWavFile(WavFile* wavFile);
+    void freeWavFile(WavFile* wavFile);
+    const char* getAudioError();
+    bool adjustVolume(WavFile* wavFile, float volumeFactor);
+    WavMetadata getWavMetadata(const WavFile* wavFile);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
