@@ -1,1 +1,4 @@
-website linguist-generated
+*.js linguist-vendored
+*.scss linguist-vendored
+*.html linguist-vendored
+Gemfile linguist-vendored
