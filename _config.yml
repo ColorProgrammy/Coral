@@ -1,6 +1,6 @@
 title: Coral
 description: A simple library for playing .wav files.
-baseurl: "Coral"
+baseurl: "/Coral"
 url: "https://colorprogrammy.github.io"
 
 theme: null
