@@ -1,4 +1,4 @@
-*.js linguist-vendored
-*.scss linguist-vendored
-*.html linguist-vendored
-Gemfile linguist-vendored
+*.js linguist-language=text
+*.scss linguist-language=text
+*.html linguist-language=text
+Gemfile linguist-language=text
