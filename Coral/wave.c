@@ -53,6 +53,94 @@ const char* getAudioError() {
 	return lastError;
 }
 
+bool adjustVolume(WavFile* wavFile, float volumeFactor) {
+	if (!wavFile) {
+		snprintf(lastError, sizeof(lastError), "Null WAV file pointer");
+		return false;
+	}
+	if (wavFile->wavFormat.audioFormat != 1) {
+		snprintf(lastError, sizeof(lastError), "Volume adjustment only supports PCM format");
+		return false;
+	}
+
+	uint16_t bitsPerSample = wavFile->wavFormat.bitsPerSample;
+	uint32_t dataSize = wavFile->wavData.subChunk2Size;
+	uint8_t* data = wavFile->data;
+
+	if (bitsPerSample % 8 != 0) {
+		snprintf(lastError, sizeof(lastError), "Unsupported bits per sample: %d", bitsPerSample);
+		return false;
+	}
+
+	uint32_t bytesPerSample = bitsPerSample / 8;
+	uint32_t numSamples = dataSize / bytesPerSample;
+
+	for (uint32_t i = 0; i < numSamples; ++i) {
+		uint8_t* samplePtr = data + i * bytesPerSample;
+
+		switch (bitsPerSample) {
+		case 8: {
+			uint8_t sample = *samplePtr;
+			int16_t adjusted = (int16_t)((sample - 128) * volumeFactor) + 128;
+			if (adjusted < 0) adjusted = 0;
+			else if (adjusted > 255) adjusted = 255;
+			*samplePtr = (uint8_t)adjusted;
+			break;
+		}
+		case 16: {
+			int16_t sample = *(int16_t*)samplePtr;
+			int32_t adjusted = (int32_t)(sample * volumeFactor);
+			if (adjusted > INT16_MAX) adjusted = INT16_MAX;
+			else if (adjusted < INT16_MIN) adjusted = INT16_MIN;
+			*(int16_t*)samplePtr = (int16_t)adjusted;
+			break;
+		}
+		case 24: {
+			int32_t sample = 0;
+			memcpy(&sample, samplePtr, 3);
+			if (sample & 0x00800000) {
+				sample |= 0xFF000000;
+			}
+			else {
+				sample &= 0x00FFFFFF;
+			}
+			sample = (int32_t)(sample * volumeFactor);
+			if (sample > 0x007FFFFF) sample = 0x007FFFFF;
+			else if (sample < (int32_t)0xFF800000) sample = (int32_t)0xFF800000;
+			memcpy(samplePtr, &sample, 3);
+			break;
+		}
+		case 32: {
+			int32_t sample = *(int32_t*)samplePtr;
+			int64_t adjusted = (int64_t)(sample * volumeFactor);
+			if (adjusted > INT32_MAX) adjusted = INT32_MAX;
+			else if (adjusted < INT32_MIN) adjusted = INT32_MIN;
+			*(int32_t*)samplePtr = (int32_t)adjusted;
+			break;
+		}
+		default: {
+			snprintf(lastError, sizeof(lastError), "Unsupported bits per sample: %d", bitsPerSample);
+			return false;
+		}
+		}
+	}
+
+	return true;
+}
+
+WavMetadata getWavMetadata(const WavFile* wavFile) {
+	WavMetadata metadata = { 0 };
+	if (wavFile) {
+		metadata.sampleRate = wavFile->wavFormat.sampleRate;
+		metadata.numChannels = wavFile->wavFormat.numChannels;
+		metadata.bitsPerSample = wavFile->wavFormat.bitsPerSample;
+		if (wavFile->wavFormat.byteRate > 0) {
+			metadata.duration = (double)wavFile->wavData.subChunk2Size / wavFile->wavFormat.byteRate;
+		}
+	}
+	return metadata;
+}
+
 WavFile* loadWavFile(const char* filename) {
 	FILE* file = fopen(filename, "rb");
 	if (!file) {
@@ -346,4 +434,3 @@ void freeWavFile(WavFile* wavFile) {
 		free(wavFile);
 	}
 }
-
