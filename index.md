@@ -41,5 +41,5 @@ title: Coral - WAV Audio Library for C/C++
 </main>
 
 <footer>
-  <p>&copy; 2025 ColorProgrammy. Powered by <a href="https://jekyllrb.com/">Jekyll</a>.</p>
+  <p>&copy; 2025 ColorProgrammy.</p>
 </footer>
