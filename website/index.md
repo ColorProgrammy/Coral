@@ -1,9 +1,12 @@
-# Coral
+---
+layout: default
+title: Home
+---
 
-### A simple library to play .wav files.
+## Welcome!
 
-Coral will help you to play .wav files.
+This is the homepage of my minimal Jekyll website.
 
-This library is suitable for operating systems such as: Windows, MacOS, Linux and its distributions.
+You can find my latest blog posts [here](/blog/).
 
-Good luck with your app creation!
+This is a minimal setup but can be extended with more features later.
