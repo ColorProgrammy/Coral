@@ -1,9 +1,9 @@
 # Coral
 
-### A simple library to play .wav files.
+## A simple library for playing .wav files.
 
-This library will help you to play .wav files.
+Coral is a versatile tool designed to play .wav audio files seamlessly.
 
-Coral is suitable for operating systems such as: Windows, MacOS, Linux and its distributions.
+Compatible with a wide range of operating systems, including Windows, MacOS, and various Linux distributions, Coral ensures smooth playback across platforms.
 
-Good luck with your app creation!
+Best of luck with your app development!
