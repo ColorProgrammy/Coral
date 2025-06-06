@@ -1,4 +1,4 @@
-#include "SimpleWave/wave.h"
+#include "Coral/wave.h"
 #include <stdio.h>
 
 int main() {
