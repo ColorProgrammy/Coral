@@ -143,27 +143,40 @@ bool adjustVolume(WavFile* wavFile, float volumeFactor) {
 
 WavMetadata getWavMetadata(const WavFile* wavFile) {
     WavMetadata metadata;
-    metadata.sampleRate = 0;
-    metadata.numChannels = 0;
-    metadata.bitsPerSample = 0;
-    metadata.duration = 0.0;
+    memset(&metadata, 0, sizeof(metadata));
     
-    if (wavFile) {
-        metadata.sampleRate = wavFile->wavFormat.sampleRate;
-        metadata.numChannels = wavFile->wavFormat.numChannels;
-        metadata.bitsPerSample = wavFile->wavFormat.bitsPerSample;
-        if (wavFile->wavFormat.byteRate > 0) {
-            metadata.duration = (double)wavFile->wavData.subChunk2Size / wavFile->wavFormat.byteRate;
+    if (!wavFile || !wavFile->data) {
+        return metadata;
+    }
+
+    metadata.sampleRate = wavFile->wavFormat.sampleRate;
+    metadata.numChannels = wavFile->wavFormat.numChannels;
+    metadata.bitsPerSample = wavFile->wavFormat.bitsPerSample;
+
+    if (metadata.sampleRate > 0 && 
+        metadata.numChannels > 0 && 
+        metadata.bitsPerSample >= 8 && 
+        wavFile->wavData.subChunk2Size > 0) {
+        
+        double bytesPerSample = metadata.bitsPerSample / 8.0;
+        double bytesPerSecond = metadata.sampleRate * metadata.numChannels * bytesPerSample;
+        
+        if (bytesPerSecond > 0) {
+            metadata.duration = (double)wavFile->wavData.subChunk2Size / bytesPerSecond;
         }
     }
+    
     return metadata;
 }
 
 WavFile* loadWavFile(const char* filename) {
-    FILE* file;
-    WavFile* wavFile;
+    FILE* file = NULL;
+    WavFile* wavFile = NULL;
     size_t readResult;
-    int memcmpResult1, memcmpResult2, memcmpResult3, memcmpResult4, memcmpResult5;
+    int memcmpResult1, memcmpResult2, memcmpResult3;
+    uint32_t chunkSize;
+    char chunkID[4];
+    long dataStartPos;
 
     file = fopen(filename, "rb");
     if (!file) {
@@ -177,13 +190,16 @@ WavFile* loadWavFile(const char* filename) {
         snprintf(lastError, sizeof(lastError), "Memory allocation failed");
         return NULL;
     }
+    memset(wavFile, 0, sizeof(WavFile));  // Initialize to zero
 
+    // Read RIFF header
     readResult = fread(&wavFile->riffHeader, sizeof(RiffHeader), 1, file);
     if (readResult != 1) {
         snprintf(lastError, sizeof(lastError), "Invalid WAV file header");
         goto error;
     }
 
+    // Validate RIFF header
     memcmpResult1 = memcmp(wavFile->riffHeader.chunkID, "RIFF", 4);
     memcmpResult2 = memcmp(wavFile->riffHeader.format, "WAVE", 4);
     if (memcmpResult1 != 0 || memcmpResult2 != 0) {
@@ -191,36 +207,58 @@ WavFile* loadWavFile(const char* filename) {
         goto error;
     }
 
+    // Read format chunk
     readResult = fread(&wavFile->wavFormat, sizeof(WavFormat), 1, file);
     if (readResult != 1) {
         snprintf(lastError, sizeof(lastError), "Invalid format chunk");
         goto error;
     }
 
+    // Validate format chunk
     memcmpResult3 = memcmp(wavFile->wavFormat.subChunk1ID, "fmt ", 4);
     if (memcmpResult3 != 0) {
         snprintf(lastError, sizeof(lastError), "Format chunk missing");
         goto error;
     }
 
-    readResult = fread(&wavFile->wavData, sizeof(WavData), 1, file);
-    if (readResult != 1) {
-        snprintf(lastError, sizeof(lastError), "Invalid data chunk");
-        goto error;
+    // Skip any extra format bytes
+    if (wavFile->wavFormat.subChunk1Size > 16) {
+        uint32_t extraBytes = wavFile->wavFormat.subChunk1Size - 16;
+        fseek(file, extraBytes, SEEK_CUR);
     }
 
-    memcmpResult4 = memcmp(wavFile->wavData.subChunk2ID, "data", 4);
-    if (memcmpResult4 != 0) {
-        snprintf(lastError, sizeof(lastError), "Data chunk missing");
-        goto error;
+    // Find the data chunk
+    while (1) {
+        readResult = fread(chunkID, 4, 1, file);
+        readResult += fread(&chunkSize, 4, 1, file);
+        
+        if (readResult != 2) {
+            snprintf(lastError, sizeof(lastError), "Failed to find data chunk");
+            goto error;
+        }
+
+        if (memcmp(chunkID, "data", 4) == 0) {
+            wavFile->wavData.subChunk2ID[0] = 'd';
+            wavFile->wavData.subChunk2ID[1] = 'a';
+            wavFile->wavData.subChunk2ID[2] = 't';
+            wavFile->wavData.subChunk2ID[3] = 'a';
+            wavFile->wavData.subChunk2Size = chunkSize;
+            dataStartPos = ftell(file);
+            break;
+        }
+        
+        // Skip unknown chunks
+        fseek(file, chunkSize, SEEK_CUR);
     }
 
+    // Allocate and read audio data
     wavFile->data = (uint8_t*)malloc(wavFile->wavData.subChunk2Size);
     if (!wavFile->data) {
         snprintf(lastError, sizeof(lastError), "Memory allocation failed for audio data");
         goto error;
     }
 
+    fseek(file, dataStartPos, SEEK_SET);
     readResult = fread(wavFile->data, wavFile->wavData.subChunk2Size, 1, file);
     if (readResult != 1) {
         snprintf(lastError, sizeof(lastError), "Failed to read audio data");
@@ -231,12 +269,8 @@ WavFile* loadWavFile(const char* filename) {
     return wavFile;
 
 error:
-    if (file) {
-        fclose(file);
-    }
-    if (wavFile) {
-        freeWavFile(wavFile);
-    }
+    if (file) fclose(file);
+    if (wavFile) freeWavFile(wavFile);
     return NULL;
 }
 
